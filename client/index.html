@@ -6,12 +6,16 @@
   <title>MiPrimerChat</title>
 
   <script type="module">
-    //aqui importaremos la versión ESM de Socket.IO cliente desde CDN
+    // Import ESM de Socket.IO cliente
     import { io } from 'https://cdn.socket.io/4.3.2/socket.io.esm.min.js'
 
-    //aqui se captura todos los elementos de la UI que se usará
-    //contenedor del chat, lista de mensajes, formulario y input de texto, "dialogo" para pedir
-    //nombre, su formulario/input y el indicador de "escribiendo..."
+    // === Selección de API_BASE (local vs prod) ===
+    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+    const API_BASE = isLocal
+      ? 'http://localhost:4000'             // dev local
+      : 'https://TU-SERVICIO.onrender.com'  // prod (reemplaza cuando tengas la URL de Render)
+
+    // Refs UI
     const chatSection = document.getElementById('chat')
     const messages = document.getElementById('messages')
     const form = document.getElementById('form')
@@ -23,11 +27,11 @@
 
     const typingBox = document.getElementById('typing-indicator')
 
-    //aqui estan las variables qeu se compartirán entre funciones
+    // Estado
     let socket
     let myUsername = null
 
-    // Con Función askUsername() siempre pedirá nombre al entrar al enlace
+    // Pedir nombre siempre
     const askUsername = () => {
       usernameDialog.hidden = false
       usernameInput.value = ''
@@ -43,27 +47,21 @@
       })
     }
 
-    //aquí guarda el nombre en myUsername
-    //Crea la conexión al servidor con autenticación embebida 
-    //muestra la sección del chat
+    // Inicializar socket usando API_BASE
     const initSocket = (username) => {
       myUsername = username
 
-      socket = io({
-        auth: {
-          username,
-          serverOffset: 0
-        }
+      socket = io(API_BASE, {
+        transports: ['websocket'],
+        auth: { username, serverOffset: 0 }
       })
 
       chatSection.hidden = false
 
-      //aqui escucha el evento chat message emitido pr el servidor
-      //se usa textContent para prevenir inyecciones
-      //calcula si se esta al fondo antes de agregar el mensaje
+      // Mensajes entrantes
       socket.on('chat message', (msg, serverOffset, fromUsername) => {
         const atBottom = messages.scrollTop + messages.clientHeight >= messages.scrollHeight - 4
-        
+
         const li = document.createElement('li')
         const p = document.createElement('p')
         const small = document.createElement('small')
@@ -73,27 +71,20 @@
         li.appendChild(small)
         messages.appendChild(li)
 
-        if (atBottom){
-            messages.scrollTop = messages.scrollHeight 
-        }
-
+        if (atBottom) messages.scrollTop = messages.scrollHeight
       })
 
-      // aqui intercepta el submit, valida text no vacío, emite chat message al servidor y limpia el input
-      //llama stopTyping para notificar que se deja de escribir al enviar
+      // Envío de mensajes
       form.addEventListener('submit', (e) => {
         e.preventDefault()
         const text = input.value.trim()
         if (!text) return
         socket.emit('chat message', text)
         input.value = ''
-        stopTyping() // dejar de “escribir” al enviar
+        stopTyping()
       })
 
       // === Indicador "escribiendo..." ===
-      // (1) Entrante: otros usuarios escribiendo
-      //mantiene un conjunto con los usuarios que están escribiendo
-      //construye el mensaje dinámico y muestra/oculta el contenedor typingBox
       const currentlyTyping = new Set()
 
       const renderTyping = () => {
@@ -112,9 +103,6 @@
         typingBox.textContent = text
       }
 
-      //aqui recibe del servidor quién está escribiendo o dejo de escribir
-      //ignora el usuario propio
-      //actualiza el set y re-renderiza
       socket.on('typing', ({ username: u, typing }) => {
         if (!u || u === myUsername) return
         if (typing) currentlyTyping.add(u)
@@ -122,7 +110,6 @@
         renderTyping()
       })
 
-      // (2) Saliente: yo escribiendo
       let isTyping = false
       let typingTimeout
       const TYPING_DELAY_MS = 1500
@@ -133,9 +120,7 @@
           socket.emit('typing', { typing: true })
         }
         clearTimeout(typingTimeout)
-        typingTimeout = setTimeout(() => {
-          stopTyping()
-        }, TYPING_DELAY_MS)
+        typingTimeout = setTimeout(() => { stopTyping() }, TYPING_DELAY_MS)
       }
 
       const stopTyping = () => {
@@ -148,12 +133,10 @@
 
       input.addEventListener('input', startTyping)
       input.addEventListener('blur', stopTyping)
-      // === Fin indicador "escribiendo..." ===
+      // === Fin indicador ===
     }
 
     // Flujo principal
-    //al cargar el script: pide nombre siempre y, cuando lo obtiene, conecta el socket y activa 
-    //toda lógica
     (async () => {
       const username = await askUsername()
       initSocket(username)
@@ -164,141 +147,43 @@
     *,
     *::before,
     *::after { box-sizing: border-box; }
-
     :root { color-scheme: dark; }
-
-    html, body {
-        height: 100%;
-    }
+    html, body { height: 100%; }
     body {
       margin: 0;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-      display: grid;
-      place-content: center;
-      height: 100vh;
-      padding: 36px 36px 100px 36px;
-      grid-template-rows: 1fr;
-      color: #eee;
-
-      min-height: 100vh;
-      min-height: 100dvh;
-
-      background: 
+      display: grid; place-content: center; height: 100vh; padding: 36px 36px 100px 36px;
+      grid-template-rows: 1fr; color: #eee;
+      min-height: 100vh; min-height: 100dvh;
+      background:
         linear-gradient(0deg, rgba(0,0,0,.45), rgba(0,0,0,.45)),
         url(img/fondo.jpg) center / cover no-repeat fixed;
     }
-
-    /* diálogo */
     #username-dialog[hidden] { display: none; }
-    #username-dialog {
-      width: 350px;
-      border: 1px solid #333;
-      border-radius: 8px;
-      padding: 16px;
-      background: #111;
-      box-shadow: 0 10px 30px rgba(0,0,0,.4);
-    }
+    #username-dialog { width: 350px; border: 1px solid #333; border-radius: 8px; padding: 16px; background: #111; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
     #username-dialog h2 { margin: 0 0 8px; font-size: 1.1rem; }
     #username-dialog p { margin: 0 0 12px; color: #bbb; font-size: .9rem; }
     #username-form { display: grid; gap: 8px; }
-    #username-input {
-      border-radius: 9999px;
-      border: 1px solid #333;
-      background: #000;
-      color: #fff;
-      padding: 10px 14px;
-    }
-    #username-form button {
-      background: #09f;
-      color: #fff;
-      border: 0;
-      padding: 10px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-    }
+    #username-input { border-radius: 9999px; border: 1px solid #333; background: #000; color: #fff; padding: 10px 14px; }
+    #username-form button { background: #09f; color: #fff; border: 0; padding: 10px 14px; border-radius: 8px; cursor: pointer; }
     #username-form button:hover { background: #0cf; }
-
-    /* chat */
     #chat[hidden] { display: none; }
-
-    #messages {
-      list-style-type: none;
-      margin: 0;
-      padding: 8px 0;
-      overflow-y: auto;
-      flex: 1;
-      scroll-behavior: smooth;
-    }
+    #messages { list-style-type: none; margin: 0; padding: 8px 0; overflow-y: auto; flex: 1; scroll-behavior: smooth; }
     #messages > li { padding: .5rem 1rem; }
     #messages > li:nth-child(odd) { background: #000; }
-
-    #chat {
-      border: 1px solid #333;
-      border-radius: 8px;
-      overflow: hidden;
-      width: 350px;
-      height: 520px;      
-      background: #0b0b0b;
-      display: flex;
-      flex-direction: column;
-    }
-
-    #chat h2{
-        text-align: center;
-        margin-top: 0;
-    }
-
-    #form {
-      
-      display: flex;
-      gap: 8px;
-      
-      padding: 6px;
-      
-      
-      background: #0b0b0b;
-      border-top: 1px solid #222;
-    }
-
-    #input {
-      border-radius: 9999px;
-      border: 1px solid #333;
-      background: #000;
-      color: #fff;
-      flex: 1;
-      margin: 4px;
-      padding: 0 12px;
-    }
+    #chat { border: 1px solid #333; border-radius: 8px; overflow: hidden; width: 350px; height: 520px; background: #0b0b0b; display: flex; flex-direction: column; }
+    #chat h2 { text-align: center; margin-top: 0; }
+    #form { display: flex; gap: 8px; padding: 6px; background: #0b0b0b; border-top: 1px solid #222; }
+    #input { border-radius: 9999px; border: 1px solid #333; background: #000; color: #fff; flex: 1; margin: 4px; padding: 0 12px; }
     #input:focus { outline: 0; }
-
-    #form > button {
-      background: #09f;
-      color: #fff;
-      border: 0;
-      margin: 4px;
-      border-radius: 8px;
-      padding: 0 12px;
-      cursor: pointer;
-    }
+    #form > button { background: #09f; color: #fff; border: 0; margin: 4px; border-radius: 8px; padding: 0 12px; cursor: pointer; }
     #form > button:hover { background: #0cf; }
-
-    /* Indicador escribiendo... */
-    #typing-indicator {
-      min-height: 20px;
-      padding: 6px 12px;
-      color: #bbb;
-      font-size: .9rem;
-      border-top: 1px solid #222;
-      background: #0b0b0b
-      
-    }
+    #typing-indicator { min-height: 20px; padding: 6px 12px; color: #bbb; font-size: .9rem; border-top: 1px solid #222; background: #0b0b0b }
     #typing-indicator[hidden] { display: none; }
   </style>
-  
 </head>
 <body>
-  <!-- Diálogo para pedir nombre SIEMPRE -->   <!-- -->
-  <!-- Bloque de UI donde el usuario elige su nombre antes de entrar al chat -->
+  <!-- Diálogo para pedir nombre -->
   <section id="username-dialog">
     <h2>Elige tu nombre</h2>
     <p>Este nombre aparecerá como tu usuario en el chat.</p>
@@ -309,8 +194,6 @@
   </section>
 
   <!-- Chat -->
-  <!-- interfaz del chat, donde se muestran los mensajes, el indicador de  -->
-  <!-- "escribiendo.. " y el formulario para enviar texto -->
   <section id="chat" hidden>
     <h2>Mi Primer Chat</h2>
     <ul id="messages"></ul>
@@ -320,7 +203,5 @@
       <button type="submit">Enviar</button>
     </form>
   </section>
-
-  
 </body>
 </html>
