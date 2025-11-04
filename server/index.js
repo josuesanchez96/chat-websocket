@@ -1,6 +1,6 @@
 import express from 'express'
 import logger from 'morgan'
-import dotenv from 'dotenv' //se importa dotenv para leer las variables de entorno
+import dotenv from 'dotenv' //se importa dotenv para leer las variables de entorno --hola
 import { createClient } from '@libsql/client'
 
 import { Server } from 'socket.io'
